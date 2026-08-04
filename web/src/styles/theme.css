@@ -1,0 +1,129 @@
+:root {
+  --bg: #0b0e14;
+  --surface: #141a24;
+  --surface-2: #1b2230;
+  --surface-3: #232b3d;
+  --border: #262d3d;
+  --text: #e7eaf0;
+  --text-muted: #8b93a7;
+  --accent: #5b7fe0;
+  --accent-hover: #6f8ee8;
+  --danger: #e5484d;
+  --danger-bg: #2a1518;
+  --success: #34d399;
+  --success-bg: #12271f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.pill.is-on {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.pill.is-off {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.btn {
+  border: none;
+  border-radius: 10px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text);
+  background: var(--surface-3);
+}
+
+.btn {
+  transition:
+    background 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.btn:hover:not(:disabled) {
+  background: #2c3549;
+  box-shadow: inset 0 0 0 1px var(--text-muted);
+}
+
+.btn.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input,
+select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 14px;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+input:hover:not(:disabled),
+select:hover:not(:disabled) {
+  border-color: var(--text-muted);
+}
+
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(91, 127, 224, 0.25);
+}
+
+input:disabled,
+select:disabled {
+  opacity: 0.5;
+}

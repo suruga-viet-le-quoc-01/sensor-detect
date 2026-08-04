@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pytest:*)",
+      "Bash(ruff:*)",
+      "Bash(python -m src.workflows.run_reader --dry-run:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Read(.env)",
+      "Write(.env)",
+      "Write(archive/**)",
+      "Read(docs/references/**/*.pdf)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ruff check --fix \"$CLAUDE_FILE_PATHS\" 2>/dev/null; ruff format \"$CLAUDE_FILE_PATHS\" 2>/dev/null; true"
+          }
+        ]
+      }
+    ]
+  }
+}
