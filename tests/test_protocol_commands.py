@@ -8,10 +8,12 @@ from src.protocol.commands import (
     AckError,
     build_enable_config,
     build_end_config,
+    build_read_parameters,
     build_restart,
     build_set_max_gate,
     build_set_range_resolution,
     build_set_sensitivity,
+    parse_read_parameters_ack,
     raise_for_ack,
 )
 from src.protocol.frames import (
@@ -58,6 +60,31 @@ def test_build_set_range_resolution_rejects_invalid_value():
 
 def test_build_restart_matches_reference_bytes():
     assert build_restart() == bytes.fromhex("FD FC FB FA 02 00 A3 00 04 03 02 01")
+
+
+def test_build_read_parameters_matches_reference_bytes():
+    assert build_read_parameters() == bytes.fromhex("FD FC FB FA 02 00 61 00 04 03 02 01")
+
+
+# Payload captured from the real sensor (pasted from a live run), so this locks in the §4 byte
+# layout against actual hardware rather than a hand-written guess.
+def test_parse_read_parameters_ack_decodes_real_hardware_payload():
+    extra = bytes.fromhex(
+        "AA 08 08 08 52 64 64 64 64 64 64 64 64 00 00 64 64 64 64 64 64 64 05 00"
+    )
+    params = parse_read_parameters_ack(AckResult(command_word=0x0061, ok=True, extra=extra))
+
+    assert params.max_gate == 8
+    assert params.max_moving_gate == 8
+    assert params.max_static_gate == 8
+    assert params.motion_sensitivity == (0x52, 100, 100, 100, 100, 100, 100, 100, 100)
+    assert params.static_sensitivity == (0, 0, 100, 100, 100, 100, 100, 100, 100)
+    assert params.no_one_duration_s == 5
+
+
+def test_parse_read_parameters_ack_rejects_short_payload():
+    with pytest.raises(MalformedFrameError):
+        parse_read_parameters_ack(AckResult(command_word=0x0061, ok=True, extra=b"\xaa\x08"))
 
 
 def test_parse_next_ack_frame_reads_clean_ack():

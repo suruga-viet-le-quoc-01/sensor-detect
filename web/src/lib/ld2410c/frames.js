@@ -152,6 +152,45 @@ export function presence(state) {
   return PRESENT_STATES.has(state);
 }
 
+// Bit flags inside target_state: bit0 = a moving target is present, bit1 = a stationary one is.
+// ONLY valid for the present states {1,2,3} -- 0x04-0x06 are noise-calibration states whose bits
+// happen to overlap these flags (0x05 sets bit0, 0x06 sets bit1) and must never be read this way.
+const MOVING_BIT = 0x01;
+const STATIC_BIT = 0x02;
+
+// A bound counts as "set" only when it's a real finite number -- an empty input box yields "" and
+// must be treated as no bound at all.
+function hasBound(value) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function inWindow(distanceCm, minCm, maxCm) {
+  if (hasBound(minCm) && distanceCm < minCm) return false;
+  if (hasBound(maxCm) && distanceCm > maxCm) return false;
+  return true;
+}
+
+// True when `frame` reports a person whose distance falls inside [minCm, maxCm]. Either bound may
+// be left unset (open-ended); both unset means no distance filtering, i.e. plain presence().
+// Mirrors presence_in_range() in src/protocol/data_frame.py -- keep the two in sync.
+//
+// WHY: presence() alone accepts a target at ANY distance the sensor still reports, and per-gate
+// sensitivity zoning cannot isolate a distance band (a person's body reflects energy into
+// neighbouring gates, so muting one gate doesn't stop that same person being picked up by the
+// next). The per-target distance the sensor reports IS specific, so filtering on it is what
+// actually restricts detection to one band.
+export function presenceInRange(frame, minCm, maxCm) {
+  if (!frame || frame.present !== true) return false;
+
+  if (!hasBound(minCm) && !hasBound(maxCm)) return true;
+
+  const movingInRange =
+    (frame.targetState & MOVING_BIT) !== 0 && inWindow(frame.movingDistanceCm, minCm, maxCm);
+  const staticInRange =
+    (frame.targetState & STATIC_BIT) !== 0 && inWindow(frame.staticDistanceCm, minCm, maxCm);
+  return movingInRange || staticInRange;
+}
+
 // Decode the target-data portion of a data-output payload into a plain frame object. Basic
 // fields are always present; engineering-mode fields (§8.3) are added only when dataType===1 and
 // the payload actually carries them -- gate count is read from the frame itself, not hardcoded.

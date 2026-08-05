@@ -1,4 +1,11 @@
-from src.protocol.data_frame import DATA_HEADER, DataFrame, parse_next_data_frame, presence
+from src.protocol.data_frame import (
+    DATA_HEADER,
+    DataFrame,
+    DistanceWindow,
+    parse_next_data_frame,
+    presence,
+    presence_in_range,
+)
 
 _VALID_BASIC_FRAME = bytes.fromhex(
     "F4 F3 F2 F1 0D 00 02 AA 02 51 00 00 00 00 3B 00 00 55 00 F8 F7 F6 F5"
@@ -85,3 +92,62 @@ def test_oversized_declared_length_is_treated_as_corrupt():
     frame, remaining = parse_next_data_frame(buffer)
     assert frame is None
     assert len(remaining) <= len(DATA_HEADER) - 1
+
+
+def _frame(target_state: int, moving_cm: int, static_cm: int) -> DataFrame:
+    return DataFrame(
+        data_type=0x02,
+        target_state=target_state,
+        moving_distance_cm=moving_cm,
+        moving_energy=50,
+        static_distance_cm=static_cm,
+        static_energy=50,
+        detection_distance_cm=moving_cm,
+    )
+
+
+def test_presence_in_range_open_window_matches_plain_presence():
+    window = DistanceWindow()
+    assert presence_in_range(_frame(1, 500, 0), window) is True
+    assert presence_in_range(_frame(0, 500, 0), window) is False
+
+
+def test_presence_in_range_accepts_moving_target_inside_window():
+    window = DistanceWindow(min_cm=40, max_cm=60)
+    assert presence_in_range(_frame(1, 50, 0), window) is True
+
+
+def test_presence_in_range_rejects_moving_target_outside_window():
+    window = DistanceWindow(min_cm=40, max_cm=60)
+    assert presence_in_range(_frame(1, 85, 0), window) is False
+    assert presence_in_range(_frame(1, 20, 0), window) is False
+
+
+def test_presence_in_range_accepts_static_target_inside_window():
+    window = DistanceWindow(min_cm=40, max_cm=60)
+    assert presence_in_range(_frame(2, 0, 55), window) is True
+    assert presence_in_range(_frame(2, 0, 90), window) is False
+
+
+# target_state=3 means both channels report a target; either one inside the band is enough.
+def test_presence_in_range_both_channels_needs_only_one_inside():
+    window = DistanceWindow(min_cm=40, max_cm=60)
+    assert presence_in_range(_frame(3, 50, 200), window) is True
+    assert presence_in_range(_frame(3, 200, 55), window) is True
+    assert presence_in_range(_frame(3, 200, 200), window) is False
+
+
+def test_presence_in_range_supports_open_ended_bounds():
+    assert presence_in_range(_frame(1, 300, 0), DistanceWindow(min_cm=100)) is True
+    assert presence_in_range(_frame(1, 50, 0), DistanceWindow(min_cm=100)) is False
+    assert presence_in_range(_frame(1, 50, 0), DistanceWindow(max_cm=100)) is True
+    assert presence_in_range(_frame(1, 300, 0), DistanceWindow(max_cm=100)) is False
+
+
+# Regression: 0x05/0x06 are noise-calibration states whose bits overlap the moving/static flags
+# (0x05 sets bit0, 0x06 sets bit1). They must never be read as a target, filter or no filter.
+def test_presence_in_range_ignores_noise_calibration_states():
+    window = DistanceWindow(min_cm=40, max_cm=60)
+    for state in (4, 5, 6):
+        assert presence_in_range(_frame(state, 50, 50), window) is False
+        assert presence_in_range(_frame(state, 50, 50), DistanceWindow()) is False

@@ -11,6 +11,16 @@
 - Buffer chưa đủ byte theo length khai báo → trả về `(None, buffer)` KHÔNG đổi (chờ đọc thêm).
 - Buffer toàn rác, không có header `F4 F3 F2 F1` nào → trả `(None, phần đuôi ngắn ≤3 byte)`, không phình bộ đệm vô hạn.
 - Header thật nhưng length khai báo bất thường lớn (vd `FF FF`) → coi là hỏng, bỏ qua ngay, không chờ vô thời hạn.
+
+### Lọc theo khoảng cách — `presence_in_range()` (DONE, xem tests/test_frame_parser.py)
+- Window rỗng (không đặt min/max) → kết quả y hệt `presence()` thuần.
+- Moving target trong dải 40–60cm (vd 50) → True; ngoài dải (20 hoặc 85) → False.
+- Static target trong dải → True; ngoài dải → False.
+- `target_state=3` (cả 2 kênh): chỉ cần **một** kênh trong dải → True; cả hai ngoài dải → False.
+- Chỉ đặt min (hoặc chỉ max) → biên còn lại mở vô hạn.
+- **Regression quan trọng**: state 4/5/6 (noise-detection) KHÔNG được coi là mục tiêu, dù bit của chúng trùng với bit moving/static (`0x05`=`0b101` có bit0, `0x06`=`0b110` có bit1). Test cả khi có lọc lẫn không lọc.
+- ⚠️ **Phát hiện trên hardware thật**: zoning bằng sensitivity=100 **có** tắt được gate (đặt tất cả gate = 100 → không nhận diện gì), nhưng KHÔNG khoanh được vùng theo khoảng cách vì thân người phản xạ sang gate lân cận → đó là lý do phải lọc bằng khoảng cách ở phần mềm. Xem docs/realtime-reader/rules.md.
+
 - **TODO (chưa làm, thuộc phase sau)**: parse engineering mode (`data_type=0x01`, energy từng gate) — hoãn tới khi implement lệnh `0x0062`/`0x0063`, vì ví dụ byte đầy đủ trong PDF gốc bị lược (`...`) nên chưa có fixture chính xác để test; test lúc đó nên dùng capture thật từ `tune.py` thay vì bịa byte.
 
 ## Config frame builder (src/protocol) — DONE, xem tests/test_protocol_commands.py

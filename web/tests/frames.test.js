@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DATA_HEADER, parseNextDataFrame, presence } from "../src/lib/ld2410c/frames.js";
+import { DATA_HEADER, parseNextDataFrame, presence, presenceInRange } from "../src/lib/ld2410c/frames.js";
 import { hexToBytes } from "./helpers.js";
 
 // Same basic-mode fixture as tests/test_frame_parser.py (Python side), byte-exact from
@@ -127,5 +127,50 @@ describe("presence", () => {
     expect(presence(4)).toBe(false);
     expect(presence(5)).toBe(false);
     expect(presence(6)).toBe(false);
+  });
+});
+
+describe("presenceInRange", () => {
+  const frame = (targetState, movingDistanceCm, staticDistanceCm) => ({
+    targetState,
+    movingDistanceCm,
+    staticDistanceCm,
+    present: [1, 2, 3].includes(targetState),
+  });
+
+  it("matches plain presence when no bound is set", () => {
+    expect(presenceInRange(frame(1, 500, 0), "", "")).toBe(true);
+    expect(presenceInRange(frame(0, 500, 0), "", "")).toBe(false);
+  });
+
+  it("accepts a moving target inside the window and rejects one outside", () => {
+    expect(presenceInRange(frame(1, 112, 0), 100, 130)).toBe(true);
+    expect(presenceInRange(frame(1, 185, 0), 100, 130)).toBe(false);
+    expect(presenceInRange(frame(1, 40, 0), 100, 130)).toBe(false);
+  });
+
+  it("accepts a stationary target inside the window", () => {
+    expect(presenceInRange(frame(2, 0, 120), 100, 130)).toBe(true);
+    expect(presenceInRange(frame(2, 0, 300), 100, 130)).toBe(false);
+  });
+
+  it("needs only one channel inside the window when both report a target", () => {
+    expect(presenceInRange(frame(3, 110, 400), 100, 130)).toBe(true);
+    expect(presenceInRange(frame(3, 400, 125), 100, 130)).toBe(true);
+    expect(presenceInRange(frame(3, 400, 400), 100, 130)).toBe(false);
+  });
+
+  it("supports open-ended bounds", () => {
+    expect(presenceInRange(frame(1, 300, 0), 100, "")).toBe(true);
+    expect(presenceInRange(frame(1, 50, 0), 100, "")).toBe(false);
+    expect(presenceInRange(frame(1, 50, 0), "", 100)).toBe(true);
+  });
+
+  // Regression: 0x05/0x06 are noise-calibration states whose bits overlap the moving/static flags.
+  it("never treats noise-calibration states as a target", () => {
+    for (const state of [4, 5, 6]) {
+      expect(presenceInRange(frame(state, 110, 110), 100, 130)).toBe(false);
+      expect(presenceInRange(frame(state, 110, 110), "", "")).toBe(false);
+    }
   });
 });
