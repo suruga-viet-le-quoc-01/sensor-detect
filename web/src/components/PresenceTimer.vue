@@ -1,9 +1,13 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
+import { presenceInRange } from "@/lib/ld2410c/frames.js";
+
 const props = defineProps({
   frame: { type: Object, default: null },
   connected: { type: Boolean, default: false },
+  // Same distance band as the Output panel, so this timer counts exactly what would be recorded.
+  window: { type: Object, default: () => ({ minCm: "", maxCm: "" }) },
 });
 
 // Live, client-side sensor sanity check -- NOT the official recorded working time (that's the
@@ -45,8 +49,9 @@ watch(
   (frame) => {
     const now = Date.now();
     // A null frame means the stream stalled (parent's watchdog cleared it) -- treat as absent so
-    // the timer stops counting and doesn't freeze on the last "在席" state.
-    const present = frame?.present === true;
+    // the timer stops counting and doesn't freeze on the last "在席" state. The distance filter is
+    // applied here too, so this total matches what run_reader would record.
+    const present = presenceInRange(frame, props.window.minCm, props.window.maxCm);
 
     // Add the elapsed time of the interval that just ended if the sensor was present during it.
     // Cap the delta so a pause/gap (e.g. tab hidden) can't inflate the total.

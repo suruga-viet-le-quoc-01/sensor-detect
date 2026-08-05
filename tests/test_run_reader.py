@@ -3,9 +3,12 @@ from datetime import datetime, time
 
 import pytest
 
+from src.protocol import DistanceWindow
 from src.session import SessionStateMachine
 from src.workflows import run_reader
 from src.workflows.run_reader import _drain_frames, _parse_shift_end_time
+
+_NO_WINDOW = DistanceWindow()
 
 _VALID_BASIC_FRAME = bytes.fromhex(
     "F4 F3 F2 F1 0D 00 02 AA 02 51 00 00 00 00 3B 00 00 55 00 F8 F7 F6 F5"
@@ -22,7 +25,7 @@ def test_parse_shift_end_time_parses_hh_mm():
 
 def test_drain_frames_empty_buffer_reports_no_frame():
     sm = SessionStateMachine(machine_id="CNC-07", presence_min_duration_s=4, debounce_s=5)
-    remaining, got_frame = _drain_frames(b"", sm, datetime.now(), None, False)
+    remaining, present, got_frame = _drain_frames(b"", sm, datetime.now(), None, False, _NO_WINDOW)
     assert got_frame is False
     assert remaining == b""
 
@@ -31,7 +34,7 @@ def test_drain_frames_feeds_presence_into_state_machine():
     sm = SessionStateMachine(machine_id="CNC-07", presence_min_duration_s=4, debounce_s=5)
     now = datetime(2026, 1, 1, 8, 0, 0)
 
-    remaining, got_frame = _drain_frames(_VALID_BASIC_FRAME, sm, now, None, False)
+    remaining, present, got_frame = _drain_frames(_VALID_BASIC_FRAME, sm, now, None, False, _NO_WINDOW)
 
     assert got_frame is True
     assert remaining == b""
@@ -43,7 +46,7 @@ def test_drain_frames_processes_multiple_frames_in_one_buffer():
     now = datetime(2026, 1, 1, 8, 0, 0)
     buffer = _VALID_BASIC_FRAME + _VALID_BASIC_FRAME
 
-    remaining, got_frame = _drain_frames(buffer, sm, now, None, False)
+    remaining, present, got_frame = _drain_frames(buffer, sm, now, None, False, _NO_WINDOW)
 
     assert got_frame is True
     assert remaining == b""

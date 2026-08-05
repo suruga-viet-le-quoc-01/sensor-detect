@@ -10,3 +10,6 @@ data/
 .ruff_cache/
 web/node_modules/
 web/dist/
+dist-exe*/
+build-exe*/
+packaging/*.spec

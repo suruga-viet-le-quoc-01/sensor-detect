@@ -11,6 +11,7 @@ Stack: Python 3.11 · pyserial · SQLite (buffer) · oracledb · FastAPI + Vue (
 - Dò UUID BLE (setup 1 lần, xem docs/sensor-config/ble-transport.md): `python -m src.workflows.ble_discover --address <MAC>`
 - Web API (backend, đọc Oracle): `uvicorn src.web_api.main:app --reload`
 - Web frontend (Vue, dev): `npm run dev` (trong thư mục web/)
+- Build .exe standalone cho PC xưởng (không cần cài Python): `python packaging/build_exe.py` → `dist-exe/sensor-reader.exe`
 - Test 1 file: `pytest tests/test_frame_parser.py -q`
 - Lint: `ruff check src tests`
 

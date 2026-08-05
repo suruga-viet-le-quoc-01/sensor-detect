@@ -6,7 +6,16 @@ Protocol: docs/references/ld2410c-protocol.md §8
 ## Các thành phần chính
 - **Frame parser**: đồng bộ header `F4 F3 F2 F1`, đọc len (2B LE), lấy `target_state = data[2]`.
 - **presence(state)**: `state ∈ {1,2,3}` → True; `state == 0` → False; `state ∈ {4,5,6}` = trạng thái noise-detection, KHÔNG coi là presence bình thường.
+- **presence_in_range(frame, window)**: presence() + lọc theo khoảng cách (xem mục dưới).
 - **Session state machine**: IDLE → CANDIDATE → ACTIVE → (CLOSING) → IDLE.
+
+## Lọc theo khoảng cách (DETECT_MIN_CM / DETECT_MAX_CM)
+Chỉ tính là có người khi khoảng cách mục tiêu nằm trong dải cấu hình. Để trống cả 2 = không lọc.
+- Luật: `presence(state)` **VÀ** (`bit moving` bật và `moving_distance_cm` trong dải **HOẶC** `bit static` bật và `static_distance_cm` trong dải).
+  - `target_state` bit0 = có moving, bit1 = có static — **chỉ đọc bit khi state ∈ {1,2,3}**; state 5 (`0b101`) và 6 (`0b110`) cũng có bit trùng nhưng là trạng thái hiệu chỉnh nhiễu, không phải mục tiêu.
+- **Vì sao không dùng zoning sensitivity để khoanh vùng**: đã xác nhận trên hardware thật rằng đặt sensitivity=100 **có** tắt được gate (đặt tất cả = 100 thì không nhận diện gì). NHƯNG tắt gate KHÔNG khoanh được vùng theo khoảng cách — thân người phản xạ năng lượng sang cả gate lân cận, nên tắt gate 1 không ngăn được chính người đứng ở gate 1 bị **gate 2 bắt được**. Khoảng cách cảm biến báo cho từng mục tiêu thì cụ thể → lọc theo nó mới thật sự giới hạn được vùng.
+- **Hạn chế**: cảm biến chỉ báo **1 mục tiêu mỗi kênh** (mạnh nhất), không phải danh sách. Có 2 người (1 trong vùng, 1 ngoài) thì người ngoài có thể che mất người trong vùng.
+- Cách chọn dải: chạy `run_reader --verbose`, đứng đúng vị trí làm việc, đọc `moving_cm`/`static_cm` thực tế rồi lấy khoảng đó ± biên độ. Log `--verbose` in cả `present=` (sau lọc) và `raw=` (trước lọc) để thấy rõ mục tiêu nào bị loại.
 
 ## Quy tắc nghiệp vụ (state machine)
 - **IDLE + present** → chuyển CANDIDATE, ghi `t_candidate_start`.

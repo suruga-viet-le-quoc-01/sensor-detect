@@ -1,6 +1,12 @@
 <script setup>
 import { computed, onUnmounted, ref, watch } from "vue";
 
+import { presenceInRange } from "@/lib/ld2410c/frames.js";
+
+// Detection distance band (cm), owned by the parent so the presence timer applies the same rule.
+// Empty string = that bound is unset.
+const window_ = defineModel("window", { required: true });
+
 const props = defineProps({
   frame: { type: Object, default: null },
   maxDistanceCm: { type: Number, default: 600 },
@@ -20,16 +26,39 @@ const holdSeconds = ref(3);
 const movingDetected = computed(() => ((props.frame?.targetState ?? 0) & 0x01) !== 0);
 const staticDetected = computed(() => ((props.frame?.targetState ?? 0) & 0x02) !== 0);
 
-// Raw combined presence straight from the frame: target_state in {1,2,3} (moving OR stationary),
-// same rule the production reader uses -- not movement-only.
+// Raw combined presence straight from the frame: target_state in {1,2,3} (moving OR stationary).
 const rawPresent = computed(() => props.frame?.present === true);
+
+// Whether a distance band is actually configured.
+const windowActive = computed(
+  () => window_.value.minCm !== "" || window_.value.maxCm !== "",
+);
+
+// Presence AFTER the distance filter -- the same rule run_reader records sessions with.
+const filteredPresent = computed(() =>
+  presenceInRange(props.frame, window_.value.minCm, window_.value.maxCm),
+);
+
+// The sensor sees someone but the distance filter rejected them -- the case worth showing
+// explicitly while tuning the band.
+const rejectedByWindow = computed(() => rawPresent.value && !filteredPresent.value);
+
+// True when a single distance reading falls inside the configured band (for the per-row badges).
+function distanceInWindow(distanceCm) {
+  if (typeof distanceCm !== "number") return false;
+
+  const { minCm, maxCm } = window_.value;
+  if (minCm !== "" && distanceCm < Number(minCm)) return false;
+  if (maxCm !== "" && distanceCm > Number(maxCm)) return false;
+  return true;
+}
 
 // Held/smoothed presence actually shown in the banner. Goes true instantly, but waits HOLD_MS of
 // continuous absence before going false.
 const displayedPresent = ref(false);
 let offTimer = null;
 
-watch(rawPresent, (present) => {
+watch(filteredPresent, (present) => {
   if (present) {
     if (offTimer) {
       clearTimeout(offTimer);
@@ -81,6 +110,18 @@ function staticEnergyAt(gateIndex) {
       </label>
     </div>
 
+    <!-- Distance band: only a target inside it counts as present. Same rule as run_reader's
+         DETECT_MIN_CM / DETECT_MAX_CM -- tune it live here, then copy the values into .env. -->
+    <div class="window-row" :class="{ active: windowActive }">
+      <span class="window-label">検知距離 (cm)</span>
+      <input v-model="window_.minCm" type="number" min="0" placeholder="最小" />
+      <span class="tilde">〜</span>
+      <input v-model="window_.maxCm" type="number" min="0" placeholder="最大" />
+      <span v-if="!windowActive" class="window-note">未設定 = 全距離を検知</span>
+      <span v-else-if="rejectedByWindow" class="window-note rejected">範囲外のため除外中</span>
+      <span v-else class="window-note on">範囲フィルタ有効</span>
+    </div>
+
     <div class="metric">
       <span class="metric-label">Detection distance</span>
       <div class="metric-value blue">{{ frame?.detectionDistanceCm ?? "-" }}<small>cm</small></div>
@@ -93,6 +134,13 @@ function staticEnergyAt(gateIndex) {
       <div class="metric-label-row">
         <span class="metric-label">Movement target</span>
         <span v-if="movingDetected" class="badge purple">Detected</span>
+        <span
+          v-if="movingDetected && windowActive"
+          class="badge"
+          :class="distanceInWindow(frame?.movingDistanceCm) ? 'in-range' : 'out-range'"
+        >
+          {{ distanceInWindow(frame?.movingDistanceCm) ? "範囲内" : "範囲外" }}
+        </span>
       </div>
       <div class="metric-value purple">{{ frame?.movingDistanceCm ?? "-" }}<small>cm</small></div>
       <div class="bar-track">
@@ -104,6 +152,13 @@ function staticEnergyAt(gateIndex) {
       <div class="metric-label-row">
         <span class="metric-label">Stationary target</span>
         <span v-if="staticDetected" class="badge orange">Detected</span>
+        <span
+          v-if="staticDetected && windowActive"
+          class="badge"
+          :class="distanceInWindow(frame?.staticDistanceCm) ? 'in-range' : 'out-range'"
+        >
+          {{ distanceInWindow(frame?.staticDistanceCm) ? "範囲内" : "範囲外" }}
+        </span>
       </div>
       <div class="metric-value orange">{{ frame?.staticDistanceCm ?? "-" }}<small>cm</small></div>
       <div class="bar-track">
@@ -191,6 +246,63 @@ function staticEnergyAt(gateIndex) {
     font-size: 14px;
     font-weight: 600;
     color: var(--text);
+  }
+
+  .window-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    background: var(--surface-2);
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 20px;
+  }
+
+  .window-row.active {
+    border-color: var(--accent);
+  }
+
+  .window-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  .window-row input {
+    width: 80px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .tilde {
+    color: var(--text-muted);
+  }
+
+  .window-note {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: 4px;
+  }
+
+  .window-note.on {
+    color: var(--success);
+  }
+
+  .window-note.rejected {
+    color: #fb923c;
+    font-weight: 600;
+  }
+
+  .badge.in-range {
+    background: rgba(52, 211, 153, 0.18);
+    color: var(--success);
+  }
+
+  .badge.out-range {
+    background: rgba(148, 163, 184, 0.18);
+    color: var(--text-muted);
   }
 
   .presence-banner .dot {

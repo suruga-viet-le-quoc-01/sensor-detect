@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onUnmounted, reactive, ref, shallowRef } from "vue";
+import { computed, onUnmounted, reactive, ref, shallowRef, watch } from "vue";
 
 import { BleTransport } from "@/lib/ld2410c/ble.js";
 import { SensorConfigClient } from "@/lib/ld2410c/config.js";
@@ -83,6 +83,23 @@ const form = reactive({
 const thresholds = reactive({
   motion: new Array(9).fill(100),
   static: new Array(9).fill(100),
+});
+
+// Detection distance band (cm) -- mirrors run_reader's DETECT_MIN_CM / DETECT_MAX_CM. Empty
+// string = bound unset. Persisted so a page reload doesn't lose the values being tuned.
+const WINDOW_STORAGE_KEY = "ld2410c.detectWindow";
+
+function loadWindow() {
+  try {
+    return { minCm: "", maxCm: "", ...JSON.parse(localStorage.getItem(WINDOW_STORAGE_KEY) ?? "{}") };
+  } catch {
+    return { minCm: "", maxCm: "" };
+  }
+}
+
+const detectWindow = ref(loadWindow());
+watch(detectWindow, (value) => localStorage.setItem(WINDOW_STORAGE_KEY, JSON.stringify(value)), {
+  deep: true,
 });
 
 // Scale for the Output panel's distance bars -- the sensor can never report a target beyond its
@@ -257,7 +274,7 @@ async function onRestart() {
       <p v-if="streamWarning" class="stream-warning">{{ streamWarning }}</p>
 
       <div class="dashboard">
-        <OutputPanel :frame="latestFrame" :max-distance-cm="maxDistanceCm" />
+        <OutputPanel v-model:window="detectWindow" :frame="latestFrame" :max-distance-cm="maxDistanceCm" />
 
         <ParametersPanel
           v-model:form="form"
@@ -272,7 +289,7 @@ async function onRestart() {
         />
       </div>
 
-      <PresenceTimer :frame="latestFrame" :connected="connected" />
+      <PresenceTimer :frame="latestFrame" :connected="connected" :window="detectWindow" />
 
       <EnergyTimeChart :frame="latestFrame" :connected="connected" />
 

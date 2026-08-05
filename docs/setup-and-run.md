@@ -66,7 +66,24 @@ Vì sao board này an toàn: chân 5V cấp nguồn cho VCC, còn TXD/RXD của 
 
 > Lưu ý: tab Cấu hình web và reader KHÔNG dùng chung cổng COM đồng thời (serial độc quyền). Đóng reader trước khi cấu hình qua Web Serial.
 
+## Triển khai PC xưởng — .exe standalone (KHÔNG cần cài Python)
+
+PC dưới xưởng **không cần cài Python**. Đóng gói reader thành 1 file .exe bằng PyInstaller:
+
+```
+python packaging/build_exe.py      # → dist-exe/sensor-reader.exe (~13MB)
+```
+
+Triển khai: chép **2 file** sang PC xưởng, đặt cùng thư mục:
+- `sensor-reader.exe`
+- `.env` (chép từ `.env.example`, sửa `COM_PORT` + `MACHINE_ID` + Oracle cho máy đó)
+
+Chạy: `sensor-reader.exe` (prod) hoặc `sensor-reader.exe --dry-run` (test, không ghi DB).
+`.env` được đọc từ **thư mục chứa exe lúc chạy** — mỗi máy 1 `.env` riêng.
+
+> Chỉ **reader** cần chạy trên từng PC xưởng. Backend (`uvicorn`) + frontend web chỉ chạy trên **1 máy chủ** duy nhất, không cần cài gì ở xưởng — người dùng chỉ mở trình duyệt.
+
 ## Ghi chú vận hành
 - SQLite buffer là nguồn sự thật local; Oracle là đích tổng hợp. Mất mạng vẫn ghi được, khi có mạng tự sync.
 - Sync KHÔNG xoá dữ liệu ngay — row chỉ được dọn sau `RETENTION_DAYS` kể từ lúc sync thành công (mặc định 7 ngày). Row chưa sync được giữ vô thời hạn tới khi sync xong.
-- Khởi động cùng Windows: đăng ký `run_reader` như scheduled task / service (tự chọn), out of scope của code lõi.
+- Khởi động cùng Windows: đăng ký `sensor-reader.exe` như scheduled task / service (vd `nssm`), out of scope của code lõi.

@@ -2,22 +2,20 @@ from __future__ import annotations
 
 import argparse
 import os
-import time
 
 from dotenv import load_dotenv
 
 from src.protocol import (
     ALL_GATES,
     MAX_GATE_ACK_HINT,
-    AckResult,
     build_enable_config,
     build_restart,
     build_set_max_gate,
     build_set_range_resolution,
     build_set_sensitivity,
-    parse_next_ack_frame,
     raise_for_ack,
 )
+from src.sensor.command_io import send_command
 from src.sensor.transport import SensorTransport, create_transport
 
 
@@ -28,28 +26,9 @@ def _clean_env(value: str) -> str:
     return value.split("#", 1)[0].strip()
 
 
-# Read the next ACK within `timeout_s`, accumulating bytes and skipping any interleaved
-# data-output frames the sensor may still emit while in config mode.
-def _read_ack(transport: SensorTransport, timeout_s: float = 3.0) -> AckResult:
-    deadline = time.monotonic() + timeout_s
-    buffer = b""
-
-    while time.monotonic() < deadline:
-        chunk = transport.read(timeout=0.5)
-        if chunk:
-            buffer += chunk
-
-        ack, buffer = parse_next_ack_frame(buffer)
-        if ack is not None:
-            return ack
-
-    raise TimeoutError("no ACK received within timeout -- check wiring/baud/COM port")
-
-
 # Send one command frame, wait for its ACK, raise on failure, and print a one-line result.
 def _send(transport: SensorTransport, frame: bytes, label: str, hint: str = "") -> None:
-    transport.send(frame)
-    ack = _read_ack(transport)
+    ack = send_command(transport, frame)
     raise_for_ack(ack, hint=hint)
     print(f"OK: {label}")
 
